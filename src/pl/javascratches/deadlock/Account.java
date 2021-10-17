@@ -1,62 +1,53 @@
 package pl.javascratches.deadlock;
 
-public class Account {
-    private static int nextId = 0;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
-    private final int accountId;
+public class Account {
+
+    private static AtomicInteger idGenerator = new AtomicInteger(1);
+    private final int id;
     private double balance;
+    private final Lock lock = new ReentrantLock();
 
     public Account(double openingBalance) {
         this.balance = openingBalance;
-        this.accountId = getAndIncrementId();
+        this.id = idGenerator.getAndDecrement();
     }
 
-    private synchronized int getAndIncrementId() {
-        nextId = nextId + 1;
-        return nextId;
-    }
-
-    public synchronized void deposit(final int amount) {
-        this.balance = this.balance + amount;
-    }
-
-    public synchronized double getBalance() {
-        return this.balance;
-    }
-
-    public int getAccountId() {
-        return accountId;
-    }
-
-    public boolean transferTo(Account other, int amount) {
-        if (this.accountId == other.getAccountId()) {
-            return false;
-        }
-
-        if (this.accountId < other.accountId) {
-            synchronized (this) {
-                if (balance >= amount) {
-                    balance = balance - amount;
-                    synchronized (other) {
-                        other.deposit(amount);
-                    }
-                    return true;
-                } else {
-                    return false;
-                }
+    public boolean withdraw(final int amount) {
+        lock.lock();
+        try {
+            if (this.balance >= amount) {
+                this.balance = this.balance - amount;
+                return true;
             }
-        } else {
-            synchronized (other) {
-                synchronized (this) {
-                    if (this.balance >= amount) {
-                        this.balance = this.balance - amount;
-                        other.deposit(amount);
-                        return true;
-                    } else {
-                        return false;
-                    }
-                }
-            }
+        } finally {
+            lock.unlock();
         }
+        return false;
+    }
+
+    public void deposit(final int amount) {
+        lock.lock();
+        try {
+            this.balance = this.balance + amount;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public double getBalance() {
+        lock.lock();
+        try {
+            return this.balance;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public int getId() {
+        return id;
     }
 }
